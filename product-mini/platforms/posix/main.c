@@ -34,6 +34,7 @@ print_help()
     printf("  --heap-size=n          Set maximum heap size in bytes, default is 16 KB\n");
     printf("  --repl                 Start a very simple REPL (read-eval-print-loop) mode\n"
            "                         that runs commands in the form of \"FUNC ARG...\"\n");
+    printf("  --time-compilation     Output the time taken for compilation and execution\n");
 #if WASM_ENABLE_LIBC_WASI != 0
     printf("  --env=<env>            Pass wasi environment variables with \"key=value\"\n");
     printf("                         to the program, for example:\n");
@@ -238,6 +239,9 @@ main(int argc, char *argv[])
     int log_verbose_level = 2;
 #endif
     bool is_repl_mode = false;
+    time_compilation = false;
+    compile_s = 0;
+    run_s = 0;
     bool is_xip_file = false;
 #if WASM_ENABLE_LIBC_WASI != 0
     const char *dir_list[8] = { NULL };
@@ -270,6 +274,9 @@ main(int argc, char *argv[])
 #endif
         else if (!strcmp(argv[0], "--repl")) {
             is_repl_mode = true;
+        }
+        else if (!strcmp(argv[0], "--time-compilation")) {
+            time_compilation = true;
         }
         else if (!strncmp(argv[0], "--stack-size=", 13)) {
             if (argv[0][13] == '\0')
@@ -438,6 +445,11 @@ main(int argc, char *argv[])
         app_instance_func(wasm_module_inst, func_name);
     else
         app_instance_main(wasm_module_inst);
+
+    if (time_compilation) {
+        printf("Compile time: %.2f s\n", compile_s);
+        printf("Run time: %.2f s\n", run_s);
+    }
 
     /* destroy the module instance */
     wasm_runtime_deinstantiate(wasm_module_inst);
