@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
+#pragma once
+double compile_s;
+double run_s;
+bool time_compilation;
+
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 

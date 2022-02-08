@@ -6,6 +6,7 @@
 #include "aot_runtime.h"
 #include "bh_log.h"
 #include "mem_alloc.h"
+#include <sys/time.h>
 #include "../common/wasm_runtime_common.h"
 #if WASM_ENABLE_SHARED_MEMORY != 0
 #include "../common/wasm_shared_memory.h"
@@ -13,6 +14,10 @@
 #if WASM_ENABLE_THREAD_MGR != 0
 #include "../libraries/thread-mgr/thread_manager.h"
 #endif
+
+extern double compile_s;
+extern double run_s;
+extern bool time_compilation;
 
 static void
 set_error_buf(char *error_buf, uint32 error_buf_size, const char *string)
@@ -1422,13 +1427,35 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
 #if WASM_ENABLE_LAZY_JIT != 0
     if (!function->u.func.func_ptr) {
         AOTModule *aot_module = (AOTModule *)module_inst->aot_module.ptr;
+
+        // Start measuring time
+        struct timeval begin, end;
+	    if (time_compilation) {
+		    gettimeofday(&begin, 0);
+	    }
+
         if (!(function->u.func.func_ptr =
                   aot_lookup_orcjit_func(aot_module->comp_ctx->orc_lazyjit,
                                          module_inst, function->func_index))) {
             return false;
         }
+
+        // Stop measuring time and calculate the elapsed time
+        if (time_compilation) {
+            gettimeofday(&end, 0);
+            long seconds = end.tv_sec - begin.tv_sec;
+            long microseconds = end.tv_usec - begin.tv_usec;
+            double elapsed = seconds + microseconds*1e-6;
+            compile_s+=elapsed;
+        }
     }
 #endif
+
+    // Start measuring time
+    struct timeval begin, end;
+    if (time_compilation) {
+        gettimeofday(&begin, 0);
+    }
 
     /* set thread handle and stack boundary */
     wasm_exec_env_set_thread_info(exec_env);
@@ -1554,6 +1581,15 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
 #if (WASM_ENABLE_DUMP_CALL_STACK != 0) || (WASM_ENABLE_PERF_PROFILING != 0)
         aot_free_frame(exec_env);
 #endif
+
+        // Stop measuring time and calculate the elapsed time
+        if (time_compilation) {
+            gettimeofday(&end, 0);
+            long seconds = end.tv_sec - begin.tv_sec;
+            long microseconds = end.tv_usec - begin.tv_usec;
+            double elapsed = seconds + microseconds*1e-6;
+            run_s+=elapsed;
+        }
 
         return ret && !aot_get_exception(module_inst) ? true : false;
     }

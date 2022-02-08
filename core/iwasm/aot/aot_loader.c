@@ -22,6 +22,10 @@
 #define XMM_PLT_PREFIX "__xmm@"
 #define REAL_PLT_PREFIX "__real@"
 
+extern double compile_s;
+extern double run_s;
+extern bool time_compilation;
+
 static void
 set_error_buf(char *error_buf, uint32 error_buf_size, const char *string)
 {
@@ -3097,6 +3101,12 @@ aot_convert_wasm_module(WASMModule *wasm_module, char *error_buf,
         goto fail1;
     }
 
+    // Start measuring time
+    struct timeval begin, end;
+    if (time_compilation) {
+        gettimeofday(&begin, 0);
+    }
+
     if (!aot_compile_wasm(comp_ctx)) {
         aot_last_error = aot_get_last_error();
         bh_assert(aot_last_error != NULL);
@@ -3108,6 +3118,15 @@ aot_convert_wasm_module(WASMModule *wasm_module, char *error_buf,
         aot_load_from_comp_data(comp_data, comp_ctx, error_buf, error_buf_size);
     if (!aot_module) {
         goto fail2;
+    }
+
+    // Stop measuring time and calculate the elapsed time
+    if (time_compilation) {
+        gettimeofday(&end, 0);
+        long seconds = end.tv_sec - begin.tv_sec;
+        long microseconds = end.tv_usec - begin.tv_usec;
+        double elapsed = seconds + microseconds*1e-6;
+        compile_s+=elapsed;
     }
 
     return aot_module;
