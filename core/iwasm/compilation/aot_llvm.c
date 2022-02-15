@@ -1602,7 +1602,7 @@ aot_create_comp_context(AOTCompData *comp_data, aot_comp_option_t option)
         /* Create LLVM execution engine */
         LLVMInitializeMCJITCompilerOptions(&jit_options, sizeof(jit_options));
         jit_options.OptLevel = LLVMCodeGenLevelAggressive;
-        jit_options.EnableFastISel = true;
+        //jit_options.EnableFastISel = true;
         /*jit_options.CodeModel = LLVMCodeModelSmall;*/
         if (WAMRCreateMCJITCompilerForModule(&comp_ctx->exec_engine,
                                              comp_ctx->module, &jit_options,
