@@ -2525,8 +2525,10 @@ invoke_native_internal(WASMExecEnv *exec_env, void *func_ptr,
         return !aot_copy_exception(module_inst, NULL);
     }
 #endif
+    bh_print_time("call wasm_runtime_invoke_native");
     return wasm_runtime_invoke_native(exec_env, func_ptr, func_type, signature,
                                       attachment, argv, argc, argv_ret);
+    bh_print_time("end wasm_runtime_invoke_native");
 }
 #endif /* end of OS_ENABLE_HW_BOUND_CHECK */
 

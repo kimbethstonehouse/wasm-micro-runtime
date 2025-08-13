@@ -7971,7 +7971,9 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
         }
     }
     else {
+        bh_print_time("call wasm_interp_call_func_bytecode");
         wasm_interp_call_func_bytecode(module_inst, exec_env, function, frame);
+        bh_print_time("end wasm_interp_call_func_bytecode");
     }
 
     /* Output the return value to the caller */
