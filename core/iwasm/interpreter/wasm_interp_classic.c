@@ -33,6 +33,9 @@ typedef int64 CellType_I64;
 typedef float32 CellType_F32;
 typedef float64 CellType_F64;
 
+struct timespec start_ts_int, end_ts_int;
+double duration_ms_int;
+
 #define BR_TABLE_TMP_BUF_LEN 32
 
 #if WASM_ENABLE_THREAD_MGR == 0
@@ -6960,12 +6963,11 @@ fast_jit_call_func_bytecode(WASMModuleInstance *module_inst,
 #endif
 
 #if WASM_ENABLE_LAZY_JIT != 0
-    bh_print_time("call jit_compiler_compile");
     if (!jit_compiler_compile(module, func_idx)) {
         wasm_set_exception(module_inst, "failed to compile fast jit function");
         return;
     }
-    bh_print_time("end jit_compiler_compile");
+
 #endif
     bh_assert(jit_compiler_is_compiled(module, func_idx));
 
@@ -6974,11 +6976,20 @@ fast_jit_call_func_bytecode(WASMModuleInstance *module_inst,
     info.frame = frame;
     frame->jitted_return_addr =
         (uint8 *)jit_globals->return_to_interp_from_jitted;
-    bh_print_time("call jitted function");
+
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+        printf("error in clock_gettime!\n");
+
     action = jit_interp_switch_to_jitted(
         exec_env, &info, func_idx,
         module_inst->fast_jit_func_ptrs[func_idx_non_import]);
-    bh_print_time("end jitted function");
+    
+    if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+        printf("error in clock_gettime!\n");
+            
+    duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+    printf("fast jit: execute function: %.1f milliseconds\n", duration_ms_int);
+
     bh_assert(action == JIT_INTERP_ACTION_NORMAL
               || (action == JIT_INTERP_ACTION_THROWN
                   && wasm_copy_exception(
@@ -7497,10 +7508,17 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
     }
     else {
         if (running_mode == Mode_Interp) {
-            bh_print_time("call wasm_interp_call_func_bytecode");
+            if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+                printf("error in clock_gettime!\n");
+
             wasm_interp_call_func_bytecode(module_inst, exec_env, function,
                                            frame);
-            bh_print_time("end wasm_interp_call_func_bytecode");
+            
+            if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+                printf("error in clock_gettime!\n");
+            
+            duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+            printf("classic interpreter: execute function: %.1f milliseconds\n", duration_ms_int);
         }
 #if WASM_ENABLE_FAST_JIT != 0
         else if (running_mode == Mode_Fast_JIT) {
@@ -7509,10 +7527,17 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
 #endif
 #if WASM_ENABLE_JIT != 0
         else if (running_mode == Mode_LLVM_JIT) {
-            bh_print_time("call llvm_jit_call_func_bytecode");
+            if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+                printf("error in clock_gettime!\n");
+
             llvm_jit_call_func_bytecode(module_inst, exec_env, function, argc,
                                         argv);
-            bh_print_time("end llvm_jit_call_func_bytecode");
+
+            if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+                printf("error in clock_gettime!\n");
+
+            duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+            printf("llvm jit: execute function: %.1f milliseconds\n", duration_ms_int);
         }
 #endif
 #if WASM_ENABLE_LAZY_JIT != 0 && WASM_ENABLE_FAST_JIT != 0 \
@@ -7523,10 +7548,17 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
             uint32 func_idx = (uint32)(function - module_inst->e->functions);
             if (module_inst->module->func_ptrs_compiled
                     [func_idx - module_inst->module->import_function_count]) {
-                bh_print_time("call llvm_jit_call_func_bytecode");
+                if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+                    printf("error in clock_gettime!\n");
+
                 llvm_jit_call_func_bytecode(module_inst, exec_env, function,
                                             argc, argv);
-                bh_print_time("end llvm_jit_call_func_bytecode");
+
+                if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+                    printf("error in clock_gettime!\n");
+
+                duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+                printf("llvm jit: execute function: %.1f milliseconds\n", duration_ms_int);                
             }
             else {
                 fast_jit_call_func_bytecode(module_inst, exec_env, function,

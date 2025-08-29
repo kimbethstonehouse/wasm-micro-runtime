@@ -51,6 +51,10 @@
         }                                                           \
     } while (0)
 
+
+struct timespec start_ts_aot_comp, end_ts_aot_comp;
+double duration_ms_aot_comp;
+
 static bool
 read_leb(const uint8 *buf, const uint8 *buf_end, uint32 *p_offset,
          uint32 maxbits, bool sign, uint64 *p_result)
@@ -4008,11 +4012,13 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
 {
     uint32 i;
 
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts_aot_comp) != 0) 
+        printf("error in clock_gettime!\n");
+
     if (!aot_validate_wasm(comp_ctx)) {
         return false;
     }
 
-    bh_print_time("Begin to compile WASM bytecode to LLVM IR");
     for (i = 0; i < comp_ctx->func_ctx_count; i++) {
         if (!aot_compile_func(comp_ctx, i)) {
             return false;
@@ -4090,7 +4096,11 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
         }
     }
 
-    bh_print_time("End compile WASM bytecode to LLVM IR");
+    if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_comp) != 0) 
+        printf("error in clock_gettime!\n");
+
+    duration_ms_aot_comp = (((double)(end_ts_aot_comp.tv_sec - start_ts_aot_comp.tv_sec)) * 1.0e3) + (((double)(end_ts_aot_comp.tv_nsec - start_ts_aot_comp.tv_nsec)) / 1.0e6);
+    printf("aot compiler: compile function: %.1f milliseconds\n", duration_ms_aot_comp);
 
     return true;
 }

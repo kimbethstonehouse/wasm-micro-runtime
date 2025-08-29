@@ -30,6 +30,9 @@ typedef int64 CellType_I64;
 typedef float32 CellType_F32;
 typedef float64 CellType_F64;
 
+struct timespec start_ts_int, end_ts_int;
+double duration_ms_int;
+
 #if WASM_ENABLE_THREAD_MGR == 0
 #define get_linear_mem_size() linear_mem_size
 #else
@@ -7971,9 +7974,16 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
         }
     }
     else {
-        bh_print_time("call wasm_interp_call_func_bytecode");
+        if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+                printf("error in clock_gettime!\n");
+
         wasm_interp_call_func_bytecode(module_inst, exec_env, function, frame);
-        bh_print_time("end wasm_interp_call_func_bytecode");
+
+        if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+            printf("error in clock_gettime!\n");
+
+        duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+        printf("fast interpreter: execute function: %.1f milliseconds\n", duration_ms_int);
     }
 
     /* Output the return value to the caller */
