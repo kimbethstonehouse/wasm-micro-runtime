@@ -167,7 +167,7 @@ static inline float64
 f64_min(float64 a, float64 b)
 {
     if (isnan(a) || isnan(b))
-        return NAN;
+        return (float64)NAN;
     else if (a == 0 && a == b)
         return signbit(a) ? a : b;
     else
@@ -178,7 +178,7 @@ static inline float64
 f64_max(float64 a, float64 b)
 {
     if (isnan(a) || isnan(b))
-        return NAN;
+        return (float64)NAN;
     else if (a == 0 && a == b)
         return signbit(a) ? b : a;
     else
@@ -1504,7 +1504,7 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
     WASMMemoryInstance *memory = wasm_get_default_memory(module);
 #if !defined(OS_ENABLE_HW_BOUND_CHECK)              \
     || WASM_CPU_SUPPORTS_UNALIGNED_ADDR_ACCESS == 0 \
-    || WASM_ENABLE_BULK_MEMORY != 0
+    || WASM_ENABLE_BULK_MEMORY_OPT != 0
     uint64 linear_mem_size = 0;
     if (memory)
 #if WASM_ENABLE_THREAD_MGR == 0
@@ -2565,7 +2565,7 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
 
                         if (len > 0) {
                             if ((uint64)start_offset + len
-                                >= wasm_array_obj_length(array_obj)) {
+                                > wasm_array_obj_length(array_obj)) {
                                 wasm_set_exception(
                                     module, "out of bounds array access");
                                 goto got_exception;
@@ -5060,6 +5060,10 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
                     PUT_I64_TO_ADDR((uint32 *)(frame_lp + local_offset),
                                     GET_I64_FROM_ADDR(frame_lp + addr1));
                 }
+                else if (local_type == VALUE_TYPE_V128) {
+                    PUT_V128_TO_ADDR((frame_lp + local_offset),
+                                     GET_V128_FROM_ADDR(frame_lp + addr1));
+                }
 #if WASM_ENABLE_GC != 0
                 else if (wasm_is_type_reftype(local_type)) {
                     PUT_REF_TO_ADDR((uint32 *)(frame_lp + local_offset),
@@ -5203,6 +5207,8 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
                                           segment);
                         break;
                     }
+#endif /* WASM_ENABLE_BULK_MEMORY */
+#if WASM_ENABLE_BULK_MEMORY_OPT != 0
                     case WASM_OP_MEMORY_COPY:
                     {
                         uint32 dst, src, len;
@@ -5293,7 +5299,7 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
                         memset(mdst, fill_val, len);
                         break;
                     }
-#endif /* WASM_ENABLE_BULK_MEMORY */
+#endif /* WASM_ENABLE_BULK_MEMORY_OPT */
 #if WASM_ENABLE_REF_TYPES != 0 || WASM_ENABLE_GC != 0
                     case WASM_OP_TABLE_INIT:
                     {
@@ -7531,6 +7537,9 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
         HANDLE_OP(EXT_OP_LOOP)
         HANDLE_OP(EXT_OP_IF)
         HANDLE_OP(EXT_OP_BR_TABLE_CACHE)
+#if WASM_ENABLE_SIMDE == 0
+        HANDLE_OP(WASM_OP_SIMD_PREFIX)
+#endif
         {
             wasm_set_exception(module, "unsupported opcode");
             goto got_exception;
@@ -7808,7 +7817,7 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
 
 #if !defined(OS_ENABLE_HW_BOUND_CHECK)              \
     || WASM_CPU_SUPPORTS_UNALIGNED_ADDR_ACCESS == 0 \
-    || WASM_ENABLE_BULK_MEMORY != 0
+    || WASM_ENABLE_BULK_MEMORY_OPT != 0
     out_of_bounds:
         wasm_set_exception(module, "out of bounds memory access");
 #endif

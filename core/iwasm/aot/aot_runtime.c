@@ -117,6 +117,13 @@ set_error_buf_v(char *error_buf, uint32 error_buf_size, const char *format, ...)
     }
 }
 
+static void
+aot_unlinked_import_func_trap(WASMExecEnv *exec_env)
+{
+    AOTModuleInstance *module_inst = (AOTModuleInstance *)exec_env->module_inst;
+    aot_set_exception_with_id(module_inst, EXCE_CALL_UNLINKED_IMPORT_FUNC);
+}
+
 static void *
 runtime_malloc(uint64 size, char *error_buf, uint32 error_buf_size)
 {
@@ -1029,14 +1036,14 @@ memory_instantiate(AOTModuleInstance *module_inst, AOTModuleInstance *parent,
         /* If only one page and at most one page, we just append
            the app heap to the end of linear memory, enlarge the
            num_bytes_per_page, and don't change the page count */
-        heap_offset = num_bytes_per_page;
-        num_bytes_per_page += heap_size;
-        if (num_bytes_per_page < heap_size) {
+        if (heap_size > UINT32_MAX - num_bytes_per_page) {
             set_error_buf(error_buf, error_buf_size,
                           "failed to insert app heap into linear memory, "
                           "try using `--heap-size=0` option");
             return NULL;
         }
+        heap_offset = num_bytes_per_page;
+        num_bytes_per_page += heap_size;
     }
     else if (heap_size > 0) {
         if (init_page_count == max_page_count && init_page_count == 0) {
@@ -1388,8 +1395,19 @@ init_func_ptrs(AOTModuleInstance *module_inst, AOTModule *module,
         if (!*func_ptrs) {
             const char *module_name = module->import_funcs[i].module_name;
             const char *field_name = module->import_funcs[i].func_name;
+
+            /* AOT mode: If linking an imported function fails, we only issue
+             * a warning here instead of throwing an error. However, during the
+             * subsequent `invoke_native` stage, calling this unresolved import
+             * will likely crash.
+             *
+             * See:
+             * https://github.com/bytecodealliance/wasm-micro-runtime/issues/4539
+             *
+             * Debugging: Check if the import is resolved at link time */
             LOG_WARNING("warning: failed to link import function (%s, %s)",
                         module_name, field_name);
+            *func_ptrs = (void *)aot_unlinked_import_func_trap;
         }
     }
 
@@ -1882,8 +1900,9 @@ check_linked_symbol(AOTModule *module, char *error_buf, uint32 error_buf_size)
 
 AOTModuleInstance *
 aot_instantiate(AOTModule *module, AOTModuleInstance *parent,
-                WASMExecEnv *exec_env_main, uint32 stack_size, uint32 heap_size,
-                uint32 max_memory_pages, char *error_buf, uint32 error_buf_size)
+                WASMExecEnv *exec_env_main,
+                const struct InstantiationArgs2 *args, char *error_buf,
+                uint32 error_buf_size)
 {
     AOTModuleInstance *module_inst;
 #if WASM_ENABLE_BULK_MEMORY != 0 || WASM_ENABLE_REF_TYPES != 0
@@ -1901,6 +1920,9 @@ aot_instantiate(AOTModule *module, AOTModuleInstance *parent,
 #if WASM_ENABLE_MULTI_MODULE != 0
     bool ret = false;
 #endif
+    uint32 stack_size = args->v1.default_stack_size;
+    uint32 heap_size = args->v1.host_managed_heap_size;
+    uint32 max_memory_pages = args->v1.max_memory_pages;
 
     /* Align and validate heap size */
     heap_size = align_uint(heap_size, 8);
@@ -1982,7 +2004,7 @@ aot_instantiate(AOTModule *module, AOTModuleInstance *parent,
 
     ret = wasm_runtime_sub_module_instantiate(
         (WASMModuleCommon *)module, (WASMModuleInstanceCommon *)module_inst,
-        stack_size, heap_size, max_memory_pages, error_buf, error_buf_size);
+        args, error_buf, error_buf_size);
     if (!ret) {
         LOG_DEBUG("build a sub module list failed");
         goto fail;
@@ -2062,17 +2084,25 @@ aot_instantiate(AOTModule *module, AOTModuleInstance *parent,
 
 #if WASM_ENABLE_LIBC_WASI != 0
     if (!is_sub_inst) {
+        const WASIArguments *wasi_args = &args->wasi;
+        if (module->wasi_args.set_by_user) {
+            if (wasi_args->set_by_user) {
+                set_error_buf(error_buf, error_buf_size,
+                              "WASI configuration was given via both of module "
+                              "and InstantiationArgs2");
+                goto fail;
+            }
+            wasi_args = &module->wasi_args;
+        }
         if (!wasm_runtime_init_wasi(
-                (WASMModuleInstanceCommon *)module_inst,
-                module->wasi_args.dir_list, module->wasi_args.dir_count,
-                module->wasi_args.map_dir_list, module->wasi_args.map_dir_count,
-                module->wasi_args.env, module->wasi_args.env_count,
-                module->wasi_args.addr_pool, module->wasi_args.addr_count,
-                module->wasi_args.ns_lookup_pool,
-                module->wasi_args.ns_lookup_count, module->wasi_args.argv,
-                module->wasi_args.argc, module->wasi_args.stdio[0],
-                module->wasi_args.stdio[1], module->wasi_args.stdio[2],
-                error_buf, error_buf_size))
+                (WASMModuleInstanceCommon *)module_inst, wasi_args->dir_list,
+                wasi_args->dir_count, wasi_args->map_dir_list,
+                wasi_args->map_dir_count, wasi_args->env, wasi_args->env_count,
+                wasi_args->addr_pool, wasi_args->addr_count,
+                wasi_args->ns_lookup_pool, wasi_args->ns_lookup_count,
+                wasi_args->argv, wasi_args->argc, wasi_args->stdio[0],
+                wasi_args->stdio[1], wasi_args->stdio[2], error_buf,
+                error_buf_size))
             goto fail;
     }
 #endif
@@ -2462,6 +2492,14 @@ invoke_native_with_hw_bound_check(WASMExecEnv *exec_env, void *func_ptr,
     }
 
     wasm_exec_env_push_jmpbuf(exec_env, &jmpbuf_node);
+
+    /* In AOT mode, this is primarily a design choice for performance reasons.
+     * Before invoke_native, we do not check whether every imported caller is
+     * NULL, unlike wasm_interp_call_func_import() and
+     * wasm_interp_call_func_native().
+     *
+     * See: https://github.com/bytecodealliance/wasm-micro-runtime/issues/4539
+     */
 
     if (os_setjmp(jmpbuf_node.jmpbuf) == 0) {
 #if WASM_ENABLE_QUICK_AOT_ENTRY != 0
@@ -4500,7 +4538,7 @@ aot_create_call_stack(struct WASMExecEnv *exec_env)
             frame.frame_ref = (uint8 *)frame.lp + (frame_ref - (uint8 *)lp);
             /* copy local ref flags from AOT module */
             bh_memcpy_s(frame.frame_ref, local_ref_flags_cell_num,
-                        local_ref_flags, lp_size);
+                        local_ref_flags, local_ref_flags_cell_num);
 #endif
         }
 
@@ -4612,16 +4650,16 @@ aot_dump_perf_profiling(const AOTModuleInstance *module_inst)
             os_printf(
                 "  func %s, execution time: %.3f ms, execution count: %" PRIu32
                 " times, children execution time: %.3f ms\n",
-                func_name, perf_prof->total_exec_time / 1000.0f,
+                func_name, perf_prof->total_exec_time / 1000.0,
                 perf_prof->total_exec_cnt,
-                perf_prof->children_exec_time / 1000.0f);
+                perf_prof->children_exec_time / 1000.0);
         else
             os_printf("  func %" PRIu32
                       ", execution time: %.3f ms, execution count: %" PRIu32
                       " times, children execution time: %.3f ms\n",
-                      i, perf_prof->total_exec_time / 1000.0f,
+                      i, perf_prof->total_exec_time / 1000.0,
                       perf_prof->total_exec_cnt,
-                      perf_prof->children_exec_time / 1000.0f);
+                      perf_prof->children_exec_time / 1000.0);
     }
 }
 
@@ -4637,7 +4675,7 @@ aot_summarize_wasm_execute_time(const AOTModuleInstance *inst)
         AOTFuncPerfProfInfo *perf_prof =
             (AOTFuncPerfProfInfo *)inst->func_perf_profilings + i;
         ret += (perf_prof->total_exec_time - perf_prof->children_exec_time)
-               / 1000.0f;
+               / 1000.0;
     }
 
     return ret;
@@ -4656,7 +4694,7 @@ aot_get_wasm_func_exec_time(const AOTModuleInstance *inst,
             AOTFuncPerfProfInfo *perf_prof =
                 (AOTFuncPerfProfInfo *)inst->func_perf_profilings + i;
             return (perf_prof->total_exec_time - perf_prof->children_exec_time)
-                   / 1000.0f;
+                   / 1000.0;
         }
     }
 

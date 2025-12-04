@@ -2388,6 +2388,9 @@ init_llvm_jit_functions_stage1(WASMModule *module, char *error_buf,
 #if WASM_ENABLE_BULK_MEMORY != 0
     option.enable_bulk_memory = true;
 #endif
+#if WASM_ENABLE_BULK_MEMORY_OPT != 0
+    option.enable_bulk_memory_opt = true;
+#endif
 #if WASM_ENABLE_THREAD_MGR != 0
     option.enable_thread_mgr = true;
 #endif
@@ -2399,6 +2402,9 @@ init_llvm_jit_functions_stage1(WASMModule *module, char *error_buf,
 #endif
 #if WASM_ENABLE_REF_TYPES != 0
     option.enable_ref_types = true;
+#endif
+#if WASM_ENABLE_CALL_INDIRECT_OVERLONG != 0
+    option.enable_call_indirect_overlong = true;
 #endif
     option.enable_aux_stack_check = true;
 #if WASM_ENABLE_PERF_PROFILING != 0 || WASM_ENABLE_DUMP_CALL_STACK != 0 \
@@ -3316,15 +3322,7 @@ create_module(char *name, char *error_buf, uint32 error_buf_size)
 #endif
 
 #if WASM_ENABLE_LIBC_WASI != 0
-#if WASM_ENABLE_LIBC_UVWASI == 0
-    module->wasi_args.stdio[0] = os_invalid_raw_handle();
-    module->wasi_args.stdio[1] = os_invalid_raw_handle();
-    module->wasi_args.stdio[2] = os_invalid_raw_handle();
-#else
-    module->wasi_args.stdio[0] = os_get_invalid_handle();
-    module->wasi_args.stdio[1] = os_get_invalid_handle();
-    module->wasi_args.stdio[2] = os_get_invalid_handle();
-#endif /* WASM_ENABLE_UVWASI == 0 */
+    wasi_args_set_defaults(&module->wasi_args);
 #endif /* WASM_ENABLE_LIBC_WASI != 0 */
 
     (void)ret;
@@ -3857,7 +3855,7 @@ wasm_loader_find_block_addr(WASMExecEnv *exec_env, BlockAddr *block_addr_cache,
             case WASM_OP_RETURN_CALL_INDIRECT:
 #endif
                 skip_leb_uint32(p, p_end); /* typeidx */
-#if WASM_ENABLE_REF_TYPES != 0
+#if WASM_ENABLE_CALL_INDIRECT_OVERLONG != 0
                 skip_leb_uint32(p, p_end); /* tableidx */
 #else
                 u8 = read_uint8(p); /* 0x00 */
@@ -4119,6 +4117,8 @@ wasm_loader_find_block_addr(WASMExecEnv *exec_env, BlockAddr *block_addr_cache,
                     case WASM_OP_DATA_DROP:
                         skip_leb_uint32(p, p_end);
                         break;
+#endif
+#if WASM_ENABLE_BULK_MEMORY_OPT != 0
                     case WASM_OP_MEMORY_COPY:
                         skip_leb_memidx(p, p_end);
                         skip_leb_memidx(p, p_end);
@@ -4126,7 +4126,7 @@ wasm_loader_find_block_addr(WASMExecEnv *exec_env, BlockAddr *block_addr_cache,
                     case WASM_OP_MEMORY_FILL:
                         skip_leb_memidx(p, p_end);
                         break;
-#endif
+#endif /* WASM_ENABLE_BULK_MEMORY_OPT */
 #if WASM_ENABLE_REF_TYPES != 0
                     case WASM_OP_TABLE_INIT:
                     case WASM_OP_TABLE_COPY:
@@ -4338,6 +4338,15 @@ static bool
 check_offset_pop(WASMLoaderContext *ctx, uint32 cells)
 {
     if (ctx->frame_offset - cells < ctx->frame_offset_bottom)
+        return false;
+    return true;
+}
+
+static bool
+check_dynamic_offset_pop(WASMLoaderContext *ctx, uint32 cells)
+{
+    if (ctx->dynamic_offset < 0
+        || (ctx->dynamic_offset > 0 && (uint32)ctx->dynamic_offset < cells))
         return false;
     return true;
 }
@@ -5256,7 +5265,8 @@ wasm_loader_pop_frame_offset(WASMLoaderContext *ctx, uint8 type,
         return true;
 
     ctx->frame_offset -= cell_num_to_pop;
-    if ((*(ctx->frame_offset) > ctx->start_dynamic_offset)
+    if (check_dynamic_offset_pop(ctx, cell_num_to_pop)
+        && (*(ctx->frame_offset) > ctx->start_dynamic_offset)
         && (*(ctx->frame_offset) < ctx->max_dynamic_offset))
         ctx->dynamic_offset -= cell_num_to_pop;
 
@@ -7077,7 +7087,7 @@ re_scan:
 
                 pb_read_leb_uint32(p, p_end, type_idx);
 
-#if WASM_ENABLE_REF_TYPES != 0
+#if WASM_ENABLE_CALL_INDIRECT_OVERLONG != 0
                 pb_read_leb_uint32(p, p_end, table_idx);
 #else
                 CHECK_BUF(p, p_end, 1);
@@ -8282,6 +8292,8 @@ re_scan:
 #endif
                         break;
                     }
+#endif /* WASM_ENABLE_BULK_MEMORY */
+#if WASM_ENABLE_BULK_MEMORY_OPT != 0
                     case WASM_OP_MEMORY_COPY:
                     {
                         CHECK_MEMORY();
@@ -8314,7 +8326,7 @@ re_scan:
 #endif
                         break;
                     }
-#endif /* WASM_ENABLE_BULK_MEMORY */
+#endif /* WASM_ENABLE_BULK_MEMORY_OPT */
 #if WASM_ENABLE_REF_TYPES != 0
                     case WASM_OP_TABLE_INIT:
                     {
