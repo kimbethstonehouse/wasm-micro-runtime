@@ -6723,10 +6723,10 @@ load_from_sections(WASMModule *module, WASMSection *sections,
 #endif
 
     calculate_global_data_offset(module);
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
     if (clock_gettime(CLOCK_MONOTONIC, &start_ts_llvm) != 0) 
         printf("error in clock_gettime!\n");
-
+#endif
 #if WASM_ENABLE_FAST_JIT != 0
     if (!init_fast_jit_functions(module, error_buf, error_buf_size)) {
         return false;
@@ -6763,13 +6763,12 @@ load_from_sections(WASMModule *module, WASMSection *sections,
         return false;
     }
 #endif
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
     if (clock_gettime(CLOCK_MONOTONIC, &end_ts_llvm) != 0) 
         printf("error in clock_gettime!\n");
-            
     duration_ms_llvm = (((double)(end_ts_llvm.tv_sec - start_ts_llvm.tv_sec)) * 1.0e3) + (((double)(end_ts_llvm.tv_nsec - start_ts_llvm.tv_nsec)) / 1.0e6);
     printf("llvm jit: compile function: %.1f milliseconds\n", duration_ms_llvm);
-
+#endif
 #if WASM_ENABLE_MEMORY_TRACING != 0
     wasm_runtime_dump_module_mem_consumption((WASMModuleCommon *)module);
 #endif

@@ -4026,10 +4026,10 @@ bool
 aot_compile_wasm(AOTCompContext *comp_ctx)
 {
     uint32 i;
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
     if (clock_gettime(CLOCK_MONOTONIC, &start_ts_aot_comp) != 0) 
         printf("error in clock_gettime!\n");
-
+#endif
     if (!aot_validate_wasm(comp_ctx)) {
         return false;
     }
@@ -4110,13 +4110,12 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
             comp_ctx->jit_stack_sizes = (uint32 *)addr;
         }
     }
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
     if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_comp) != 0) 
         printf("error in clock_gettime!\n");
-
     duration_ms_aot_comp = (((double)(end_ts_aot_comp.tv_sec - start_ts_aot_comp.tv_sec)) * 1.0e3) + (((double)(end_ts_aot_comp.tv_nsec - start_ts_aot_comp.tv_nsec)) / 1.0e6);
     printf("aot compiler: compile function: %.1f milliseconds\n", duration_ms_aot_comp);
-
+#endif
     return true;
 }
 

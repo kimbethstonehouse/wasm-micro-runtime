@@ -108,8 +108,9 @@ fail1:
 void
 jit_compiler_destroy()
 {
+#if WASM_ENABLE_TIME_COMPILATION == 1
     printf("fast jit: compile function: %.1f milliseconds\n", duration_ms_fast_jit);
-
+#endif
     jit_codegen_destroy();
 
     jit_code_cache_destroy();
@@ -130,9 +131,10 @@ jit_compiler_get_pass_name(unsigned i)
 bool
 jit_compiler_compile(WASMModule *module, uint32 func_idx)
 {
+#if WASM_ENABLE_TIME_COMPILATION == 1
     if (clock_gettime(CLOCK_MONOTONIC, &start_ts_fast_jit) != 0) 
                 printf("error in clock_gettime!\n");
-
+#endif
     JitCompContext *cc = NULL;
     char *last_error;
     bool ret = false;
@@ -188,12 +190,11 @@ fail:
         jit_cc_delete(cc);
 
     os_mutex_unlock(&module->fast_jit_thread_locks[j]);
-    
+#if WASM_ENABLE_TIME_COMPILATION == 1    
     if (clock_gettime(CLOCK_MONOTONIC, &end_ts_fast_jit) != 0) 
         printf("error in clock_gettime!\n");
-            
     duration_ms_fast_jit += (((double)(end_ts_fast_jit.tv_sec - start_ts_fast_jit.tv_sec)) * 1.0e3) + (((double)(end_ts_fast_jit.tv_nsec - start_ts_fast_jit.tv_nsec)) / 1.0e6);
-
+#endif
     return ret;
 }
 

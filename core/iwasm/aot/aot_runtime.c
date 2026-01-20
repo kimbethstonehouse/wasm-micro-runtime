@@ -2715,19 +2715,19 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
             return false;
         }
 #endif
+#if WASM_ENABLE_TIME_COMPILATION == 1
         if (clock_gettime(CLOCK_MONOTONIC, &start_ts_aot_exec) != 0) 
             printf("error in clock_gettime!\n");
-
+#endif
         ret = invoke_native_internal(exec_env, function->u.func.func_ptr,
                                      func_type, NULL, attachment, argv1, argc,
                                      argv);
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
         if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_exec) != 0) 
             printf("error in clock_gettime!\n");
-            
         duration_ms_aot_exec += (((double)(end_ts_aot_exec.tv_sec - start_ts_aot_exec.tv_sec)) * 1.0e3) + (((double)(end_ts_aot_exec.tv_nsec - start_ts_aot_exec.tv_nsec)) / 1.0e6);
         printf("aot compiler: execute function: %.1f milliseconds\n", duration_ms_aot_exec);
-
+#endif
         if (!ret) {
 #ifdef AOT_STACK_FRAME_DEBUG
             if (aot_stack_frame_callback) {
@@ -2797,18 +2797,18 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
             return false;
         }
 #endif
+#if WASM_ENABLE_TIME_COMPILATION == 1
         if (clock_gettime(CLOCK_MONOTONIC, &start_ts_aot_exec) != 0) 
             printf("error in clock_gettime!\n");
-        
+#endif
         ret = invoke_native_internal(exec_env, func_ptr, func_type, NULL,
                                      attachment, argv, argc, argv);
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
         if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_exec) != 0) 
             printf("error in clock_gettime!\n");
-            
         duration_ms_aot_exec += (((double)(end_ts_aot_exec.tv_sec - start_ts_aot_exec.tv_sec)) * 1.0e3) + (((double)(end_ts_aot_exec.tv_nsec - start_ts_aot_exec.tv_nsec)) / 1.0e6);
         printf("aot compiler: execute function: %.1f milliseconds\n", duration_ms_aot_exec);
-
+#endif
         if (!ret) {
 #ifdef AOT_STACK_FRAME_DEBUG
             if (aot_stack_frame_callback) {
