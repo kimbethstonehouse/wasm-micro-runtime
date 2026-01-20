@@ -51,6 +51,10 @@
         }                                                           \
     } while (0)
 
+
+struct timespec start_ts_aot_comp, end_ts_aot_comp;
+double duration_ms_aot_comp;
+
 static bool
 read_leb(const uint8 *buf, const uint8 *buf_end, uint32 *p_offset,
          uint32 maxbits, bool sign, uint64 *p_result)
@@ -4022,12 +4026,14 @@ bool
 aot_compile_wasm(AOTCompContext *comp_ctx)
 {
     uint32 i;
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts_aot_comp) != 0) 
+        printf("error in clock_gettime!\n");
+#endif
     if (!aot_validate_wasm(comp_ctx)) {
         return false;
     }
 
-    bh_print_time("Begin to compile WASM bytecode to LLVM IR");
     for (i = 0; i < comp_ctx->func_ctx_count; i++) {
         if (!aot_compile_func(comp_ctx, i)) {
             return false;
@@ -4041,7 +4047,7 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
     /* Disable LLVM module verification for jit mode to speedup
        the compilation process */
     if (!comp_ctx->is_jit_mode) {
-        bh_print_time("Begin to verify LLVM module");
+        // bh_print_time("Begin to verify LLVM module");
         if (!verify_module(comp_ctx)) {
             return false;
         }
@@ -4055,9 +4061,9 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
            speedup the launch process. Now there are two issues in the
            JIT: one is memory leak in do_ir_transform, the other is
            possible core dump. */
-        bh_print_time("Begin to run llvm optimization passes");
+        // bh_print_time("Begin to run llvm optimization passes");
         aot_apply_llvm_new_pass_manager(comp_ctx, comp_ctx->module);
-        bh_print_time("Finish llvm optimization passes");
+        // bh_print_time("Finish llvm optimization passes");
     }
 
 #ifdef DUMP_MODULE
@@ -4104,7 +4110,12 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
             comp_ctx->jit_stack_sizes = (uint32 *)addr;
         }
     }
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
+    if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_comp) != 0) 
+        printf("error in clock_gettime!\n");
+    duration_ms_aot_comp = (((double)(end_ts_aot_comp.tv_sec - start_ts_aot_comp.tv_sec)) * 1.0e3) + (((double)(end_ts_aot_comp.tv_nsec - start_ts_aot_comp.tv_nsec)) / 1.0e6);
+    printf("aot compiler: compile function: %.1f milliseconds\n", duration_ms_aot_comp);
+#endif
     return true;
 }
 

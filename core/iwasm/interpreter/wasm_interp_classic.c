@@ -33,6 +33,9 @@ typedef int64 CellType_I64;
 typedef float32 CellType_F32;
 typedef float64 CellType_F64;
 
+struct timespec start_ts_int, end_ts_int;
+double duration_ms_int;
+
 #define BR_TABLE_TMP_BUF_LEN 32
 
 #if WASM_ENABLE_THREAD_MGR == 0
@@ -1674,7 +1677,13 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
 #if WASM_ENABLE_LABELS_AS_VALUES == 0
     while (frame_ip < frame_ip_end) {
         opcode = *frame_ip++;
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+        if (cur_func - module->e->functions == 135) {
+            printf("opcode: 0x%x\n", opcode);
+        }
+#endif
         switch (opcode) {
+
 #else
     FETCH_OPCODE_AND_DISPATCH();
 #endif
@@ -2313,6 +2322,12 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
                 CHECK_SUSPEND_FLAGS();
 #endif
                 read_leb_uint32(frame_ip, frame_ip_end, fidx);
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                printf("Calling function: %ld\n", fidx);
+                if (fidx == 24) {
+                    printf("With parameter 0x%x\n", *((int64_t *)(frame_sp-2)));
+                }
+#endif
 #if WASM_ENABLE_MULTI_MODULE != 0
                 if (fidx >= module->e->function_count) {
                     wasm_set_exception(module, "unknown function");
@@ -2366,6 +2381,7 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
                  * no matter it is used or not
                  */
                 read_leb_uint32(frame_ip, frame_ip_end, tidx);
+
                 bh_assert(tidx < module->module->type_count);
                 cur_type = wasm_types[tidx];
 
@@ -2393,6 +2409,10 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
                 /* clang-format off */
 #if WASM_ENABLE_GC == 0
                 fidx = tbl_inst->elems[val];
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+        if (cur_func - module->e->functions == 84) printf("fidx: 0x%x\n", fidx);
+                printf("Calling function: %ld\n", fidx);
+#endif
                 if (fidx == (uint32)-1) {
                     wasm_set_exception(module, "uninitialized element");
                     goto got_exception;
@@ -4145,6 +4165,8 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
             {
                 GET_LOCAL_INDEX_TYPE_AND_OFFSET();
 
+                
+
                 switch (local_type) {
                     case VALUE_TYPE_I32:
                     case VALUE_TYPE_F32:
@@ -4184,12 +4206,21 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
             HANDLE_OP(EXT_OP_GET_LOCAL_FAST)
             {
                 local_offset = *frame_ip++;
-                if (local_offset & 0x80)
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (cur_func - module->e->functions == 24 && local_offset == 0) {
+                    printf("get_local: 0x%x\n", *((int32 *)(frame_lp + local_offset)));
+                }
+#endif
+                if (local_offset & 0x80) {
                     PUSH_I64(
                         GET_I64_FROM_ADDR(frame_lp + (local_offset & 0x7F)));
-                else
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (cur_func - module->e->functions == 56) printf("get_local: 0x%x\n", *((int64 *)(frame_lp + (local_offset & 0x7F))));
+#endif
+                    } else {
                     PUSH_I32(*(int32 *)(frame_lp + local_offset));
-                HANDLE_OP_END();
+
+                } HANDLE_OP_END();
             }
 
             HANDLE_OP(WASM_OP_SET_LOCAL)
@@ -4278,14 +4309,20 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
             HANDLE_OP(EXT_OP_TEE_LOCAL_FAST)
             {
                 local_offset = *frame_ip++;
-                if (local_offset & 0x80)
+                if (local_offset & 0x80) {
                     PUT_I64_TO_ADDR(
                         (uint32 *)(frame_lp + (local_offset & 0x7F)),
                         GET_I64_FROM_ADDR(frame_sp - 2));
-                else
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (fidx == 56) printf("tee_local: 0x%x\n", *((int64_t *)(frame_sp-2)));
+#endif
+                    } else {
                     *(int32 *)(frame_lp + local_offset) =
                         *(int32 *)(frame_sp - 1);
-                HANDLE_OP_END();
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (fidx == 56) printf("tee_local: 0x%x\n", *((int32_t *)(frame_sp-1)));
+#endif
+                    } HANDLE_OP_END();
             }
 
             HANDLE_OP(WASM_OP_GET_GLOBAL)
@@ -4293,6 +4330,11 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
                 read_leb_uint32(frame_ip, frame_ip_end, global_idx);
                 bh_assert(global_idx < module->e->global_count);
                 global = globals + global_idx;
+#if WASM_ENABLE_DEBUG_LOGGING == 1                
+                if (cur_func - module->e->functions == 107) {
+                    printf("global val: 0x%x\n", *(uint32 *)global_addr);
+                }
+#endif
                 global_addr = get_global_addr(global_data, global);
                 /* clang-format off */
 #if WASM_ENABLE_GC == 0
@@ -4410,8 +4452,18 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
                 read_leb_memarg(frame_ip, frame_ip_end, flags);
                 read_leb_mem_offset(frame_ip, frame_ip_end, offset);
                 addr = POP_MEM_OFFSET();
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (cur_func - module->e->functions == 84) {
+                    printf("load addr: 0x%x, offset: 0x%x\n", addr, offset);
+                }
+#endif
                 CHECK_MEMORY_OVERFLOW(4);
                 PUSH_I32(LOAD_I32(maddr));
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                 if (cur_func - module->e->functions == 84) {
+                    printf("load value: 0x%x\n", LOAD_I32(maddr));
+                }
+#endif
                 CHECK_READ_WATCHPOINT(addr, offset);
                 HANDLE_OP_END();
             }
@@ -4449,7 +4501,11 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
             {
                 uint32 flags;
                 mem_offset_t offset, addr;
-
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (cur_func - module->e->functions == 24) {
+                    printf("opcode: 0x%x\n", opcode);
+                }
+#endif
                 read_leb_memarg(frame_ip, frame_ip_end, flags);
                 read_leb_mem_offset(frame_ip, frame_ip_end, offset);
                 addr = POP_MEM_OFFSET();
@@ -4739,6 +4795,11 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
 
             HANDLE_OP(WASM_OP_F64_CONST)
             {
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (cur_func - module->e->functions == 24) {
+                    printf("Here");
+                }
+#endif
                 uint8 *p_float = (uint8 *)frame_sp++;
                 frame_sp++;
                 for (i = 0; i < sizeof(float64); i++)
@@ -4767,6 +4828,12 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
 
             HANDLE_OP(WASM_OP_I32_LT_S)
             {
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (cur_func - ?module->e->functions == 107) {
+                    int32_t val = *(int32 *)(frame_sp-2);
+                    printf("lt_s val: 0d%d\n", val);
+                }
+#endif                
                 DEF_OP_CMP(int32, I32, <);
                 HANDLE_OP_END();
             }
@@ -5075,6 +5142,11 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
 
             HANDLE_OP(WASM_OP_I32_SHL)
             {
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (cur_func - module->e->functions == 24) {
+                    printf("i64_add: 0x%x\n", *(int64 *)(frame_sp-2));
+                }
+#endif
                 DEF_OP_NUMERIC2(uint32, uint32, I32, <<);
                 HANDLE_OP_END();
             }
@@ -5133,6 +5205,9 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
             HANDLE_OP(WASM_OP_I64_ADD)
             {
                 DEF_OP_NUMERIC_64(uint64, uint64, I64, +);
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (cur_func - module->e->functions == 56) printf("i64_add: 0x%x\n", *(int64 *)(frame_sp-2));
+#endif
                 HANDLE_OP_END();
             }
 
@@ -5627,6 +5702,9 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
             HANDLE_OP(WASM_OP_F32_REINTERPRET_I32)
             HANDLE_OP(WASM_OP_F64_REINTERPRET_I64)
             {
+#if WASM_ENABLE_DEBUG_LOGGING == 1
+                if (fidx == 56)? printf("Reinterpret value 0x%x\n", *((int64_t *)(frame_sp-2)));
+#endif
                 HANDLE_OP_END();
             }
 
@@ -6970,6 +7048,7 @@ fast_jit_call_func_bytecode(WASMModuleInstance *module_inst,
         wasm_set_exception(module_inst, "failed to compile fast jit function");
         return;
     }
+
 #endif
     bh_assert(jit_compiler_is_compiled(module, func_idx));
 
@@ -6978,9 +7057,20 @@ fast_jit_call_func_bytecode(WASMModuleInstance *module_inst,
     info.frame = frame;
     frame->jitted_return_addr =
         (uint8 *)jit_globals->return_to_interp_from_jitted;
+
+#if WASM_ENABLE_TIME_COMPILATION == 1
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+        printf("error in clock_gettime!\n");
+#endif
     action = jit_interp_switch_to_jitted(
         exec_env, &info, func_idx,
         module_inst->fast_jit_func_ptrs[func_idx_non_import]);
+#if WASM_ENABLE_TIME_COMPILATION == 1
+    if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+        printf("error in clock_gettime!\n");
+    duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+    printf("fast jit: execute function: %.1f milliseconds\n", duration_ms_int);
+#endif
     bh_assert(action == JIT_INTERP_ACTION_NORMAL
               || (action == JIT_INTERP_ACTION_THROWN
                   && wasm_copy_exception(
@@ -7499,8 +7589,18 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
     }
     else {
         if (running_mode == Mode_Interp) {
+#if WASM_ENABLE_TIME_COMPILATION == 1
+            if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+                printf("error in clock_gettime!\n");
+#endif
             wasm_interp_call_func_bytecode(module_inst, exec_env, function,
                                            frame);
+#if WASM_ENABLE_TIME_COMPILATION == 1
+            if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+                printf("error in clock_gettime!\n");
+            duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+            printf("classic interpreter: execute function: %.1f milliseconds\n", duration_ms_int);
+#endif
         }
 #if WASM_ENABLE_FAST_JIT != 0
         else if (running_mode == Mode_Fast_JIT) {
@@ -7509,8 +7609,18 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
 #endif
 #if WASM_ENABLE_JIT != 0
         else if (running_mode == Mode_LLVM_JIT) {
+#if WASM_ENABLE_TIME_COMPILATION == 1
+            if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+                printf("error in clock_gettime!\n");
+#endif
             llvm_jit_call_func_bytecode(module_inst, exec_env, function, argc,
                                         argv);
+#if WASM_ENABLE_TIME_COMPILATION == 1
+            if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+                printf("error in clock_gettime!\n");
+            duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+            printf("llvm jit: execute function: %.1f milliseconds\n", duration_ms_int);
+#endif
         }
 #endif
 #if WASM_ENABLE_LAZY_JIT != 0 && WASM_ENABLE_FAST_JIT != 0 \
@@ -7521,8 +7631,18 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
             uint32 func_idx = (uint32)(function - module_inst->e->functions);
             if (module_inst->module->func_ptrs_compiled
                     [func_idx - module_inst->module->import_function_count]) {
+#if WASM_ENABLE_TIME_COMPILATION == 1
+                if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+                    printf("error in clock_gettime!\n");
+#endif
                 llvm_jit_call_func_bytecode(module_inst, exec_env, function,
                                             argc, argv);
+#if WASM_ENABLE_TIME_COMPILATION == 1
+                if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+                    printf("error in clock_gettime!\n");
+                duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+                printf("llvm jit: execute function: %.1f milliseconds\n", duration_ms_int);                
+#endif
             }
             else {
                 fast_jit_call_func_bytecode(module_inst, exec_env, function,

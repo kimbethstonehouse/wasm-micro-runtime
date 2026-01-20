@@ -22,6 +22,9 @@
  * AoT compilation code: aot_create_func_context, check_suspend_flags.
  */
 
+struct timespec start_ts_aot_exec, end_ts_aot_exec;
+double duration_ms_aot_exec;
+
 bh_static_assert(offsetof(WASMExecEnv, cur_frame) == 1 * sizeof(uintptr_t));
 bh_static_assert(offsetof(WASMExecEnv, module_inst) == 2 * sizeof(uintptr_t));
 bh_static_assert(offsetof(WASMExecEnv, argv_buf) == 3 * sizeof(uintptr_t));
@@ -2626,6 +2629,8 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
     }
 #endif
 
+
+
     if (argc < func_type->param_cell_num) {
         char buf[108];
         snprintf(buf, sizeof(buf),
@@ -2635,6 +2640,8 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
         return false;
     }
     argc = func_type->param_cell_num;
+
+
 
 #if defined(os_writegsbase)
     {
@@ -2709,11 +2716,19 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
             return false;
         }
 #endif
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
+        if (clock_gettime(CLOCK_MONOTONIC, &start_ts_aot_exec) != 0) 
+            printf("error in clock_gettime!\n");
+#endif
         ret = invoke_native_internal(exec_env, function->u.func.func_ptr,
                                      func_type, NULL, attachment, argv1, argc,
                                      argv);
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
+        if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_exec) != 0) 
+            printf("error in clock_gettime!\n");
+        duration_ms_aot_exec += (((double)(end_ts_aot_exec.tv_sec - start_ts_aot_exec.tv_sec)) * 1.0e3) + (((double)(end_ts_aot_exec.tv_nsec - start_ts_aot_exec.tv_nsec)) / 1.0e6);
+        printf("aot compiler: execute function: %.1f milliseconds\n", duration_ms_aot_exec);
+#endif
         if (!ret) {
 #ifdef AOT_STACK_FRAME_DEBUG
             if (aot_stack_frame_callback) {
@@ -2783,10 +2798,18 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
             return false;
         }
 #endif
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
+        if (clock_gettime(CLOCK_MONOTONIC, &start_ts_aot_exec) != 0) 
+            printf("error in clock_gettime!\n");
+#endif
         ret = invoke_native_internal(exec_env, func_ptr, func_type, NULL,
                                      attachment, argv, argc, argv);
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
+        if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_exec) != 0) 
+            printf("error in clock_gettime!\n");
+        duration_ms_aot_exec += (((double)(end_ts_aot_exec.tv_sec - start_ts_aot_exec.tv_sec)) * 1.0e3) + (((double)(end_ts_aot_exec.tv_nsec - start_ts_aot_exec.tv_nsec)) / 1.0e6);
+        printf("aot compiler: execute function: %.1f milliseconds\n", duration_ms_aot_exec);
+#endif
         if (!ret) {
 #ifdef AOT_STACK_FRAME_DEBUG
             if (aot_stack_frame_callback) {
