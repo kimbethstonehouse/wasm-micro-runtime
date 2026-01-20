@@ -51,9 +51,10 @@
         }                                                           \
     } while (0)
 
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
 struct timespec start_ts_aot_comp, end_ts_aot_comp;
 double duration_ms_aot_comp;
+#endif
 
 static bool
 read_leb(const uint8 *buf, const uint8 *buf_end, uint32 *p_offset,

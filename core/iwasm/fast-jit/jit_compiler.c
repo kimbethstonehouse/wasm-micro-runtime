@@ -9,8 +9,14 @@
 #include "jit_codecache.h"
 #include "../interpreter/wasm.h"
 
+#if WASM_ENABLE_TIME_COMPILATION == 1
 struct timespec start_ts_fast_jit, end_ts_fast_jit;
 double duration_ms_fast_jit;
+#endif
+
+#ifdef WASM_ENABLE_COUNT_INSTRUCTIONS
+uint64_t total_wasm_insts_ = 0;
+#endif
 
 typedef struct JitCompilerPass {
     /* Name of the pass */
@@ -86,8 +92,12 @@ jit_compiler_init(const JitCompOptions *options)
     uint32 code_cache_size = options->code_cache_size > 0
                                  ? options->code_cache_size
                                  : FAST_JIT_DEFAULT_CODE_CACHE_SIZE;
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
     duration_ms_fast_jit = 0;
+#endif
+#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
+    total_wasm_insts_ = 0;
+#endif
 
     LOG_VERBOSE("JIT: compiler init with code cache size: %u\n",
                 code_cache_size);
@@ -110,6 +120,9 @@ jit_compiler_destroy()
 {
 #if WASM_ENABLE_TIME_COMPILATION == 1
     printf("fast jit: compile function: %.1f milliseconds\n", duration_ms_fast_jit);
+#endif
+#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
+    printf("fast jit: wasm instruction count: %lu\n", total_wasm_insts_);
 #endif
     jit_codegen_destroy();
 
@@ -194,6 +207,10 @@ fail:
     if (clock_gettime(CLOCK_MONOTONIC, &end_ts_fast_jit) != 0) 
         printf("error in clock_gettime!\n");
     duration_ms_fast_jit += (((double)(end_ts_fast_jit.tv_sec - start_ts_fast_jit.tv_sec)) * 1.0e3) + (((double)(end_ts_fast_jit.tv_nsec - start_ts_fast_jit.tv_nsec)) / 1.0e6);
+#endif
+#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1    
+    cc->cur_wasm_func
+
 #endif
     return ret;
 }

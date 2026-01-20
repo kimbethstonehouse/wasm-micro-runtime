@@ -36,8 +36,10 @@
 #define TEMPLATE_READ_VALUE(Type, p) \
     (p += sizeof(Type), *(Type *)(p - sizeof(Type)))
 
+#if WASM_ENABLE_TIME_COMPILATION == 1
 struct timespec start_ts_llvm, end_ts_llvm;
 double duration_ms_llvm;
+#endif
 
 #if WASM_ENABLE_MEMORY64 != 0
 static bool

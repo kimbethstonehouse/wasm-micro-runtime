@@ -21,9 +21,10 @@
  * Note: These offsets need to match the values hardcoded in
  * AoT compilation code: aot_create_func_context, check_suspend_flags.
  */
-
+#if WASM_ENABLE_TIME_COMPILATION == 1
 struct timespec start_ts_aot_exec, end_ts_aot_exec;
 double duration_ms_aot_exec;
+#endif
 
 bh_static_assert(offsetof(WASMExecEnv, cur_frame) == 1 * sizeof(uintptr_t));
 bh_static_assert(offsetof(WASMExecEnv, module_inst) == 2 * sizeof(uintptr_t));

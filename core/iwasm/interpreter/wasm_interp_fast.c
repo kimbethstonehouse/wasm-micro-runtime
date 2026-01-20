@@ -30,8 +30,14 @@ typedef int64 CellType_I64;
 typedef float32 CellType_F32;
 typedef float64 CellType_F64;
 
+#if WASM_ENABLE_TIME_COMPILATION == 1
 struct timespec start_ts_int, end_ts_int;
 double duration_ms_int;
+#endif
+
+#ifdef WASM_ENABLE_COUNT_INSTRUCTIONS
+uint64_t total_wasm_insts_;
+#endif
 
 #if WASM_ENABLE_THREAD_MGR == 0
 #define get_linear_mem_size() linear_mem_size
@@ -1600,6 +1606,9 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
 #if WASM_ENABLE_LABELS_AS_VALUES == 0
     while (frame_ip < frame_ip_end) {
         opcode = *frame_ip++;
+#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
+        total_wasm_insts_++;
+#endif
 #if WASM_CPU_SUPPORTS_UNALIGNED_ADDR_ACCESS == 0
         frame_ip++;
 #endif
@@ -7993,7 +8002,10 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
             printf("error in clock_gettime!\n");
         duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
         printf("fast interpreter: execute function: %.1f milliseconds\n", duration_ms_int);
-#endif    
+#endif
+#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
+            printf("fast interpreter: wasm instruction count: %lu\n", total_wasm_insts_);
+#endif
     }
 
     /* Output the return value to the caller */
