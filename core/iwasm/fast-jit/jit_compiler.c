@@ -11,11 +11,7 @@
 
 #if WASM_ENABLE_TIME_COMPILATION == 1
 struct timespec start_ts_fast_jit, end_ts_fast_jit;
-double duration_ms_fast_jit;
-#endif
-
-#ifdef WASM_ENABLE_COUNT_INSTRUCTIONS
-uint64_t total_wasm_insts_ = 0;
+double duration_ms_fast_jit = 0;
 #endif
 
 typedef struct JitCompilerPass {
@@ -95,9 +91,6 @@ jit_compiler_init(const JitCompOptions *options)
 #if WASM_ENABLE_TIME_COMPILATION == 1
     duration_ms_fast_jit = 0;
 #endif
-#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
-    total_wasm_insts_ = 0;
-#endif
 
     LOG_VERBOSE("JIT: compiler init with code cache size: %u\n",
                 code_cache_size);
@@ -120,9 +113,6 @@ jit_compiler_destroy()
 {
 #if WASM_ENABLE_TIME_COMPILATION == 1
     printf("fast jit: compile function: %.1f milliseconds\n", duration_ms_fast_jit);
-#endif
-#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
-    printf("fast jit: wasm instruction count: %lu\n", total_wasm_insts_);
 #endif
     jit_codegen_destroy();
 
@@ -179,6 +169,10 @@ jit_compiler_compile(WASMModule *module, uint32 func_idx)
                                && !cc->cur_wasm_func->has_op_func_call)
                               || (!module->possible_memory_grow);
 
+#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
+    printf("Compiling function index: %u\n", func_idx);
+#endif
+
     /* Apply compiler passes */
     if (!apply_compiler_passes(cc) || jit_get_last_error(cc)) {
         last_error = jit_get_last_error(cc);
@@ -206,11 +200,8 @@ fail:
 #if WASM_ENABLE_TIME_COMPILATION == 1    
     if (clock_gettime(CLOCK_MONOTONIC, &end_ts_fast_jit) != 0) 
         printf("error in clock_gettime!\n");
-    duration_ms_fast_jit += (((double)(end_ts_fast_jit.tv_sec - start_ts_fast_jit.tv_sec)) * 1.0e3) + (((double)(end_ts_fast_jit.tv_nsec - start_ts_fast_jit.tv_nsec)) / 1.0e6);
-#endif
-#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1    
-    cc->cur_wasm_func
-
+    double duration_s = end_ts_fast_jit.tv_sec-start_ts_fast_jit.tv_sec + ((double)(end_ts_fast_jit.tv_nsec-start_ts_fast_jit.tv_nsec))/1.0e9;
+    duration_ms_fast_jit += duration_s * 1.0e3;
 #endif
     return ret;
 }

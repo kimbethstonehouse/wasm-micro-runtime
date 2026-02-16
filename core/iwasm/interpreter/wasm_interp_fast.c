@@ -32,7 +32,7 @@ typedef float64 CellType_F64;
 
 #if WASM_ENABLE_TIME_COMPILATION == 1
 struct timespec start_ts_int, end_ts_int;
-double duration_ms_int;
+double duration_ms_int = 0;
 #endif
 
 #ifdef WASM_ENABLE_COUNT_INSTRUCTIONS
@@ -8000,7 +8000,8 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
 #if WASM_ENABLE_TIME_COMPILATION == 1
         if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
             printf("error in clock_gettime!\n");
-        duration_ms_int = (((double)(end_ts_int.tv_sec - start_ts_int.tv_sec)) * 1.0e3) + (((double)(end_ts_int.tv_nsec - start_ts_int.tv_nsec)) / 1.0e6);
+        double duration_s = end_ts_int.tv_sec-start_ts_int.tv_sec + ((double)(end_ts_int.tv_nsec-start_ts_int.tv_nsec))/1.0e9;
+        duration_ms_int = duration_s * 1.0e3;
         printf("fast interpreter: execute function: %.1f milliseconds\n", duration_ms_int);
 #endif
 #if WASM_ENABLE_COUNT_INSTRUCTIONS == 1

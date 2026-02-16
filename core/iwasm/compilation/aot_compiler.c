@@ -53,7 +53,7 @@
 
 #if WASM_ENABLE_TIME_COMPILATION == 1
 struct timespec start_ts_aot_comp, end_ts_aot_comp;
-double duration_ms_aot_comp;
+double duration_ms_aot_comp = 0;
 #endif
 
 static bool
@@ -4036,6 +4036,9 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
     }
 
     for (i = 0; i < comp_ctx->func_ctx_count; i++) {
+#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
+        printf("Compiling function index: %u\n", func_idx);
+#endif
         if (!aot_compile_func(comp_ctx, i)) {
             return false;
         }
@@ -4114,7 +4117,8 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
 #if WASM_ENABLE_TIME_COMPILATION == 1
     if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_comp) != 0) 
         printf("error in clock_gettime!\n");
-    duration_ms_aot_comp = (((double)(end_ts_aot_comp.tv_sec - start_ts_aot_comp.tv_sec)) * 1.0e3) + (((double)(end_ts_aot_comp.tv_nsec - start_ts_aot_comp.tv_nsec)) / 1.0e6);
+    double duration_s = end_ts_aot_comp.tv_sec-start_ts_aot_comp.tv_sec + ((double)(end_ts_aot_comp.tv_nsec-start_ts_aot_comp.tv_nsec))/1.0e9;
+    duration_ms_aot_comp = duration_s * 1.0e3;
     printf("aot compiler: compile function: %.1f milliseconds\n", duration_ms_aot_comp);
 #endif
     return true;

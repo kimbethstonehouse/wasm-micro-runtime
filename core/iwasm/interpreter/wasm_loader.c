@@ -38,7 +38,7 @@
 
 #if WASM_ENABLE_TIME_COMPILATION == 1
 struct timespec start_ts_llvm, end_ts_llvm;
-double duration_ms_llvm;
+double duration_ms_llvm = 0;
 #endif
 
 #if WASM_ENABLE_MEMORY64 != 0
@@ -6768,7 +6768,8 @@ load_from_sections(WASMModule *module, WASMSection *sections,
 #if WASM_ENABLE_TIME_COMPILATION == 1
     if (clock_gettime(CLOCK_MONOTONIC, &end_ts_llvm) != 0) 
         printf("error in clock_gettime!\n");
-    duration_ms_llvm = (((double)(end_ts_llvm.tv_sec - start_ts_llvm.tv_sec)) * 1.0e3) + (((double)(end_ts_llvm.tv_nsec - start_ts_llvm.tv_nsec)) / 1.0e6);
+    double duration_s = end_ts_llvm.tv_sec-start_ts_llvm.tv_sec + ((double)(end_ts_llvm.tv_nsec-start_ts_llvm.tv_nsec))/1.0e9;
+    duration_ms_llvm = duration_s * 1.0e3;
     printf("llvm jit: compile function: %.1f milliseconds\n", duration_ms_llvm);
 #endif
 #if WASM_ENABLE_MEMORY_TRACING != 0

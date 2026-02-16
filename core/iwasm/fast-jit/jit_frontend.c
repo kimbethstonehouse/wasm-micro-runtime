@@ -1453,9 +1453,6 @@ jit_compile_func(JitCompContext *cc)
     while (frame_ip < frame_ip_end) {
         cc->jit_frame->ip = frame_ip;
         opcode = *frame_ip++;
-#if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
-        total_wasm_insts_++;
-#endif
 
 #if 0 /* TODO */
 #if WASM_ENABLE_THREAD_MGR != 0
