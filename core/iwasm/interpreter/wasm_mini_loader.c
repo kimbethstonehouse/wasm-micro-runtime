@@ -2613,6 +2613,7 @@ orcjit_thread_callback(void *arg)
         snprintf(func_name, sizeof(func_name), "%s%d%s", AOT_FUNC_PREFIX, i,
                  "_wrapper");
         LOG_DEBUG("compile llvm jit func %s", func_name);
+        printf("compile llvm jit func %s, i: %d\n", func_name, i);
         error =
             LLVMOrcLLLazyJITLookup(comp_ctx->orc_jit, &func_addr, func_name);
         if (error != LLVMErrorSuccess) {

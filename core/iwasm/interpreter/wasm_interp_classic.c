@@ -7413,7 +7413,6 @@ llvm_jit_call_func_bytecode(WASMModuleInstance *module_inst,
                 (uintptr_t)(ext_rets + cell_num);
             cell_num += wasm_value_type_cell_num(ext_ret_types[i]);
         }
-
         ret = wasm_runtime_invoke_native(
             exec_env, module_inst->func_ptrs[func_idx], func_type, NULL, NULL,
             argv1, argc, argv);
@@ -7469,7 +7468,7 @@ llvm_jit_call_func_bytecode(WASMModuleInstance *module_inst,
         }
         else
 #endif
-        {
+        {            
             ret = wasm_runtime_invoke_native(
                 exec_env, module_inst->func_ptrs[func_idx], func_type, NULL,
                 NULL, argv, argc, argv);
@@ -7664,8 +7663,19 @@ wasm_interp_call_wasm(WASMModuleInstance *module_inst, WASMExecEnv *exec_env,
 #endif
             }
             else {
+#if WASM_ENABLE_TIME_COMPILATION == 1
+                if (clock_gettime(CLOCK_MONOTONIC, &start_ts_int) != 0) 
+                    printf("error in clock_gettime!\n");
+#endif
                 fast_jit_call_func_bytecode(module_inst, exec_env, function,
                                             frame);
+#if WASM_ENABLE_TIME_COMPILATION == 1
+                if (clock_gettime(CLOCK_MONOTONIC, &end_ts_int) != 0) 
+                    printf("error in clock_gettime!\n");
+                double duration_s = end_ts_int.tv_sec-start_ts_int.tv_sec + ((double)(end_ts_int.tv_nsec-start_ts_int.tv_nsec))/1.0e9;
+                duration_ms_int = duration_s * 1.0e3;
+                printf("llvm jit: execute function: %.1f milliseconds\n", duration_ms_int);                
+#endif
             }
         }
 #endif

@@ -26,6 +26,11 @@
 #include "../compilation/aot_llvm.h"
 #endif
 
+#if WASM_ENABLE_TIME_COMPILATION == 1
+struct timespec start_ts_llvm_comp, end_ts_llvm_comp;
+double duration_ms_llvm_comp = 0;
+#endif
+
 #ifndef TRACE_WASM_LOADER
 #define TRACE_WASM_LOADER 0
 #endif
@@ -6099,6 +6104,11 @@ orcjit_thread_callback(void *arg)
         snprintf(func_name, sizeof(func_name), "%s%d%s", AOT_FUNC_PREFIX, i,
                  "_wrapper");
         LOG_DEBUG("compile llvm jit func %s", func_name);
+        printf("compile llvm jit func %s, i: %d\n", func_name, i+module->import_function_count);
+#if WASM_ENABLE_TIME_COMPILATION == 1
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts_llvm_comp) != 0) 
+        printf("error in clock_gettime!\n");
+#endif
         error =
             LLVMOrcLLLazyJITLookup(comp_ctx->orc_jit, &func_addr, func_name);
         if (error != LLVMErrorSuccess) {
@@ -6145,6 +6155,14 @@ orcjit_thread_callback(void *arg)
 #endif
             }
         }
+
+#if WASM_ENABLE_TIME_COMPILATION == 1
+        if (clock_gettime(CLOCK_MONOTONIC, &end_ts_llvm_comp) != 0) 
+            printf("error in clock_gettime!\n");
+        double duration_s = end_ts_llvm_comp.tv_sec-start_ts_llvm_comp.tv_sec + ((double)(end_ts_llvm_comp.tv_nsec-start_ts_llvm_comp.tv_nsec))/1.0e9;
+        duration_ms_llvm_comp = duration_s * 1.0e3;
+        printf("llvm compiler: compile function %d: %.1f milliseconds\n", i+module->import_function_count, duration_ms_llvm_comp);
+#endif
 
         if (module->orcjit_stop_compiling) {
             break;
@@ -6725,10 +6743,6 @@ load_from_sections(WASMModule *module, WASMSection *sections,
 #endif
 
     calculate_global_data_offset(module);
-#if WASM_ENABLE_TIME_COMPILATION == 1
-    if (clock_gettime(CLOCK_MONOTONIC, &start_ts_llvm) != 0) 
-        printf("error in clock_gettime!\n");
-#endif
 #if WASM_ENABLE_FAST_JIT != 0
     if (!init_fast_jit_functions(module, error_buf, error_buf_size)) {
         return false;
@@ -6764,13 +6778,6 @@ load_from_sections(WASMModule *module, WASMSection *sections,
     if (!compile_jit_functions(module, error_buf, error_buf_size)) {
         return false;
     }
-#endif
-#if WASM_ENABLE_TIME_COMPILATION == 1
-    if (clock_gettime(CLOCK_MONOTONIC, &end_ts_llvm) != 0) 
-        printf("error in clock_gettime!\n");
-    double duration_s = end_ts_llvm.tv_sec-start_ts_llvm.tv_sec + ((double)(end_ts_llvm.tv_nsec-start_ts_llvm.tv_nsec))/1.0e9;
-    duration_ms_llvm = duration_s * 1.0e3;
-    printf("llvm jit: compile function: %.1f milliseconds\n", duration_ms_llvm);
 #endif
 #if WASM_ENABLE_MEMORY_TRACING != 0
     wasm_runtime_dump_module_mem_consumption((WASMModuleCommon *)module);

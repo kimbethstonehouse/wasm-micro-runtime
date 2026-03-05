@@ -2728,7 +2728,7 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
         if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_exec) != 0) 
             printf("error in clock_gettime!\n");
         double duration_s = end_ts_aot_exec.tv_sec-start_ts_aot_exec.tv_sec + ((double)(end_ts_aot_exec.tv_nsec-start_ts_aot_exec.tv_nsec))/1.0e9;
-        duration_ms_aot_exec += duration_s * 1.0e3;
+        duration_ms_aot_exec = duration_s * 1.0e3;
         printf("aot compiler: execute function: %.1f milliseconds\n", duration_ms_aot_exec);
 #endif
         if (!ret) {
@@ -2810,7 +2810,7 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
         if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_exec) != 0) 
             printf("error in clock_gettime!\n");
         double duration_s = end_ts_aot_exec.tv_sec-start_ts_aot_exec.tv_sec + ((double)(end_ts_aot_exec.tv_nsec-start_ts_aot_exec.tv_nsec))/1.0e9;
-        duration_ms_aot_exec += duration_s * 1.0e3;
+        duration_ms_aot_exec = duration_s * 1.0e3;
         printf("aot compiler: execute function: %.1f milliseconds\n", duration_ms_aot_exec);
 #endif
         if (!ret) {
@@ -3477,8 +3477,19 @@ aot_call_indirect(WASMExecEnv *exec_env, uint32 tbl_idx, uint32 table_elem_idx,
             return false;
         }
 #endif
+#if WASM_ENABLE_TIME_COMPILATION == 1
+        if (clock_gettime(CLOCK_MONOTONIC, &start_ts_aot_exec) != 0) 
+            printf("error in clock_gettime!\n");
+#endif
         ret = invoke_native_internal(exec_env, func_ptr, func_type, signature,
                                      attachment, argv1, argc, argv);
+#if WASM_ENABLE_TIME_COMPILATION == 1
+        if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_exec) != 0) 
+            printf("error in clock_gettime!\n");
+        double duration_s = end_ts_aot_exec.tv_sec-start_ts_aot_exec.tv_sec + ((double)(end_ts_aot_exec.tv_nsec-start_ts_aot_exec.tv_nsec))/1.0e9;
+        duration_ms_aot_exec = duration_s * 1.0e3;
+        printf("aot compiler: execute function: %.1f milliseconds\n", duration_ms_aot_exec);
+#endif
 #if WASM_ENABLE_AOT_STACK_FRAME != 0
         /* Free all frames allocated, note that some frames
            may be allocated in AOT code and haven't been
@@ -3537,8 +3548,19 @@ aot_call_indirect(WASMExecEnv *exec_env, uint32 tbl_idx, uint32 table_elem_idx,
             return false;
         }
 #endif
+#if WASM_ENABLE_TIME_COMPILATION == 1
+        if (clock_gettime(CLOCK_MONOTONIC, &start_ts_aot_exec) != 0) 
+            printf("error in clock_gettime!\n");
+#endif
         ret = invoke_native_internal(exec_env, func_ptr, func_type, signature,
                                      attachment, argv, argc, argv);
+#if WASM_ENABLE_TIME_COMPILATION == 1
+        if (clock_gettime(CLOCK_MONOTONIC, &end_ts_aot_exec) != 0) 
+            printf("error in clock_gettime!\n");
+        double duration_s = end_ts_aot_exec.tv_sec-start_ts_aot_exec.tv_sec + ((double)(end_ts_aot_exec.tv_nsec-start_ts_aot_exec.tv_nsec))/1.0e9;
+        duration_ms_aot_exec = duration_s * 1.0e3;
+        printf("aot compiler: execute function: %.1f milliseconds\n", duration_ms_aot_exec);
+#endif
 #if WASM_ENABLE_AOT_STACK_FRAME != 0
         /* Free all frames allocated, note that some frames
            may be allocated in AOT code and haven't been

@@ -4037,7 +4037,7 @@ aot_compile_wasm(AOTCompContext *comp_ctx)
 
     for (i = 0; i < comp_ctx->func_ctx_count; i++) {
 #if WASM_ENABLE_COUNT_INSTRUCTIONS == 1
-        printf("Compiling function index: %u\n", func_idx);
+        printf("Compiling function index: %u\n", i);
 #endif
         if (!aot_compile_func(comp_ctx, i)) {
             return false;
